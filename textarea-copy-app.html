@@ -71,6 +71,35 @@
             gap: 12px;
             margin-bottom: 16px;
             animation: slideIn 0.3s ease;
+            position: relative;
+        }
+
+        .drag-handle {
+            width: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: grab;
+            color: #9ca3af;
+            font-size: 24px;
+            transition: all 0.3s ease;
+            user-select: none;
+        }
+
+        .drag-handle:hover {
+            color: #667eea;
+        }
+
+        .drag-handle:active {
+            cursor: grabbing;
+        }
+
+        .textarea-row.dragging {
+            opacity: 0.5;
+        }
+
+        .textarea-row.drag-over {
+            border-top: 3px solid #ea6666;
         }
 
         @keyframes slideIn {
@@ -175,7 +204,8 @@
         </div>
 
         <div id="textareaContainer">
-            <div class="textarea-row">
+            <div class="textarea-row" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondrop="handleDrop(event)" ondragleave="handleDragLeave(event)">
+                <div class="drag-handle">⋮⋮</div>
                 <textarea placeholder="テキストを入力してください..." oninput="autoResize(this)"></textarea>
                 <button class="btn-copy" onclick="copyText(this)">コピー</button>
             </div>
@@ -185,6 +215,61 @@
     <button class="fab" onclick="addTextarea()">+</button>
 
     <script>
+        let draggedElement = null;
+
+        function handleDragStart(e) {
+            draggedElement = e.currentTarget;
+            e.currentTarget.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+        }
+
+        function handleDragEnd(e) {
+            e.currentTarget.classList.remove('dragging');
+
+            // すべての要素からdrag-overクラスを削除
+            document.querySelectorAll('.textarea-row').forEach(row => {
+                row.classList.remove('drag-over');
+            });
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+
+            const row = e.currentTarget;
+            if (row !== draggedElement) {
+                row.classList.add('drag-over');
+            }
+            return false;
+        }
+
+        function handleDragLeave(e) {
+            e.currentTarget.classList.remove('drag-over');
+        }
+
+        function handleDrop(e) {
+            e.stopPropagation();
+            e.preventDefault();
+
+            const dropTarget = e.currentTarget;
+
+            if (draggedElement !== dropTarget) {
+                const container = document.getElementById('textareaContainer');
+                const allRows = Array.from(container.children);
+                const draggedIndex = allRows.indexOf(draggedElement);
+                const targetIndex = allRows.indexOf(dropTarget);
+
+                if (draggedIndex < targetIndex) {
+                    dropTarget.parentNode.insertBefore(draggedElement, dropTarget.nextSibling);
+                } else {
+                    dropTarget.parentNode.insertBefore(draggedElement, dropTarget);
+                }
+            }
+
+            dropTarget.classList.remove('drag-over');
+            return false;
+        }
+
         function autoResize(textarea) {
             textarea.style.height = 'auto';
             textarea.style.height = textarea.scrollHeight + 'px';
@@ -193,12 +278,12 @@
         function copyText(button) {
             const row = button.parentElement;
             const textarea = row.querySelector('textarea');
-            
+
             navigator.clipboard.writeText(textarea.value).then(() => {
                 const originalText = button.textContent;
                 button.textContent = 'コピー完了!';
                 button.classList.add('copied');
-                
+
                 setTimeout(() => {
                     button.textContent = originalText;
                     button.classList.remove('copied');
@@ -213,7 +298,14 @@
             const container = document.getElementById('textareaContainer');
             const newRow = document.createElement('div');
             newRow.className = 'textarea-row';
+            newRow.draggable = true;
+            newRow.ondragstart = handleDragStart;
+            newRow.ondragend = handleDragEnd;
+            newRow.ondragover = handleDragOver;
+            newRow.ondrop = handleDrop;
+            newRow.ondragleave = handleDragLeave;
             newRow.innerHTML = `
+                <div class="drag-handle">⋮⋮</div>
                 <textarea placeholder="テキストを入力してください..." oninput="autoResize(this)"></textarea>
                 <button class="btn-copy" onclick="copyText(this)">コピー</button>
             `;
@@ -223,11 +315,11 @@
         function saveData() {
             const textareas = document.querySelectorAll('textarea');
             const data = Array.from(textareas).map(ta => ta.value);
-            
+
             const json = JSON.stringify(data, null, 2);
             const blob = new Blob([json], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
-            
+
             const a = document.createElement('a');
             a.href = url;
             a.download = 'textarea-data.json';
@@ -240,34 +332,41 @@
         function loadData(event) {
             const file = event.target.files[0];
             if (!file) return;
-            
+
             const reader = new FileReader();
             reader.onload = function(e) {
                 try {
                     const data = JSON.parse(e.target.result);
-                    
+
                     if (!Array.isArray(data)) {
                         alert('無効なJSONフォーマットです');
                         return;
                     }
-                    
+
                     const container = document.getElementById('textareaContainer');
                     container.innerHTML = '';
-                    
+
                     data.forEach(text => {
                         const newRow = document.createElement('div');
                         newRow.className = 'textarea-row';
+                        newRow.draggable = true;
+                        newRow.ondragstart = handleDragStart;
+                        newRow.ondragend = handleDragEnd;
+                        newRow.ondragover = handleDragOver;
+                        newRow.ondrop = handleDrop;
+                        newRow.ondragleave = handleDragLeave;
                         newRow.innerHTML = `
+                            <div class="drag-handle">⋮⋮</div>
                             <textarea placeholder="テキストを入力してください..." oninput="autoResize(this)">${text}</textarea>
                             <button class="btn-copy" onclick="copyText(this)">コピー</button>
                         `;
                         container.appendChild(newRow);
-                        
+
                         // 読み込み時に高さを調整
                         const textarea = newRow.querySelector('textarea');
                         autoResize(textarea);
                     });
-                    
+
                     if (data.length === 0) {
                         addTextarea();
                     }
@@ -277,7 +376,7 @@
                 }
             };
             reader.readAsText(file);
-            
+
             event.target.value = '';
         }
     </script>
